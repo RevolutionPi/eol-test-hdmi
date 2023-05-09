@@ -1,10 +1,15 @@
 [package]
 name = "eol-test-hdmi"
-authors = ["KUNBUS GmbH <support@kunbus.com"]
-version = "0.1.0"
+authors = ["KUNBUS GmbH <support@kunbus.com>"]
+description = "Tool to test HDMI output by drawing on the framebuffer and playing audio over ALSA"
+version = "0.0.0"
 edition = "2021"
+repository = "https://github.com/RevolutionPi/eol-test-hdmi"
 
 [profile.release]
 strip = true
 
 [dependencies]
+alsa = "0.7.0"
+anyhow = "1.0.71"
+framebuffer = "0.3.1"
