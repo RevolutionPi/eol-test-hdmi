@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ * SPDX-FileCopyrightText: Copyright 2023 KUNBUS GmbH
+ */
+
 //! Test video and audio output by showing coloured frames on the framebuffer and playing back a
 //! siren over the default ALSA audio device.
 
