@@ -1,0 +1,10 @@
+[package]
+name = "eol-test-hdmi"
+authors = ["KUNBUS GmbH <support@kunbus.com>"]
+version = "0.0.0"
+edition = "2021"
+
+[profile.release]
+strip = true
+
+[dependencies]
