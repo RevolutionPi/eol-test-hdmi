@@ -29,32 +29,11 @@ fn frame_set_color(frame: &mut [u8], color: (u8, u8, u8)) {
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    if let Some(a) = std::env::args().nth(1) {
-        if a == "--version" {
-            let name = env!("CARGO_PKG_NAME");
-            let version = env!("CARGO_PKG_VERSION");
-            eprintln!("{name}: {version}");
-            std::process::exit(0);
-        }
-    }
-
-    let frame_thread = thread::spawn(|| -> anyhow::Result<()> { frame() });
-    let siren_thread = thread::spawn(|| -> anyhow::Result<()> { siren() });
-
-    if let Ok(frame_thread_status) = frame_thread.join() {
-        // propagate error that might have happened in the thread
-        frame_thread_status?;
-    } else {
-        bail!("Unable to join frame_thread");
-    };
-    if let Ok(siren_thread_status) = siren_thread.join() {
-        siren_thread_status?;
-    } else {
-        bail!("Unable to join siren_thread");
-    };
-
-    Ok(())
+/// Write frame to framebuffer and wait for `FRAME_LENGTH` seconds.
+fn frame_write_color(framebuffer: &mut Framebuffer, frame: &mut [u8], color: (u8, u8, u8)) {
+    frame_set_color(frame, color);
+    framebuffer.write_frame(frame);
+    thread::sleep(time::Duration::from_secs(FRAME_LENGTH));
 }
 
 /// Display 3 frames, each being shown for `FRAME_LENGTH` seconds. The frames will alternate in
@@ -62,30 +41,22 @@ fn main() -> anyhow::Result<()> {
 fn frame() -> anyhow::Result<()> {
     let mut framebuffer = Framebuffer::new(FB)?;
 
-    let w = framebuffer.var_screen_info.xres;
-    let h = framebuffer.var_screen_info.yres;
+    let fb_width = framebuffer.var_screen_info.xres;
+    let fb_height = framebuffer.var_screen_info.yres;
     let line_length = framebuffer.fix_screen_info.line_length;
     let bytespp = framebuffer.var_screen_info.bits_per_pixel / 8;
 
-    println!("w: {w}; h: {h}; line_length: {line_length}; bpp: {bytespp}");
+    println!("w: {fb_width}; h: {fb_height}; line_length: {line_length}; bpp: {bytespp}");
 
-    let mut frame = vec![0u8; (line_length * h) as usize];
+    let mut frame = vec![0u8; (line_length * fb_height) as usize];
 
     //Disable text mode for tty1
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Graphics)
         .context("Unable to disable text mode on framebuffer")?;
 
-    frame_set_color(&mut frame, (0xff, 0, 0));
-    framebuffer.write_frame(&frame);
-    thread::sleep(time::Duration::from_secs(FRAME_LENGTH));
-
-    frame_set_color(&mut frame, (0, 0xff, 0));
-    framebuffer.write_frame(&frame);
-    thread::sleep(time::Duration::from_secs(FRAME_LENGTH));
-
-    frame_set_color(&mut frame, (0, 0, 0xff));
-    framebuffer.write_frame(&frame);
-    thread::sleep(time::Duration::from_secs(FRAME_LENGTH));
+    frame_write_color(&mut framebuffer, &mut frame, (0xff, 0, 0));
+    frame_write_color(&mut framebuffer, &mut frame, (0, 0xff, 0));
+    frame_write_color(&mut framebuffer, &mut frame, (0, 0, 0xff));
 
     //Reenable text mode in current tty
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Text)
@@ -94,6 +65,21 @@ fn frame() -> anyhow::Result<()> {
     Ok(())
 }
 
+// can be improved if needed
+fn play_sine_wave(io: &alsa::pcm::IO<i16>, buf: &mut [i16], pitch: f32) -> anyhow::Result<()> {
+    for (i, frame) in buf.iter_mut().enumerate() {
+        *frame = ((i as f32 * pitch * ::std::f32::consts::PI / 128.0).sin() * 8192.0) as i16
+    }
+
+    // Play it back for AUDIO_LENGTH seconds.
+    for _ in 0..AUDIO_LENGTH * 44100 / 1024 {
+        assert_eq!(io.writei(buf)?, 1024);
+    }
+
+    Ok(())
+}
+
+// https://docs.rs/alsa/0.7.0/alsa/pcm/index.html
 /// Sound a siren over the default ALSA device. The siren consists of 3 tones, each being played
 /// back for `AUDIO_LENGTH` seconds.
 fn siren() -> anyhow::Result<()> {
@@ -120,36 +106,44 @@ fn siren() -> anyhow::Result<()> {
 
     // Make a sine wave
     let mut buf = [0i16; 1024];
-    for (i, a) in buf.iter_mut().enumerate() {
-        *a = ((i as f32 * 2.0 * ::std::f32::consts::PI / 128.0).sin() * 8192.0) as i16
-    }
 
-    // Play it back for AUDIO_LENGTH seconds.
-    for _ in 0..AUDIO_LENGTH * 44100 / 1024 {
-        assert_eq!(io.writei(&buf[..])?, 1024);
-    }
-
-    for (i, a) in buf.iter_mut().enumerate() {
-        *a = ((i as f32 * 4.0 * ::std::f32::consts::PI / 128.0).sin() * 8192.0) as i16
-    }
-
-    for _ in 0..AUDIO_LENGTH * 44100 / 1024 {
-        assert_eq!(io.writei(&buf[..])?, 1024);
-    }
-
-    for (i, a) in buf.iter_mut().enumerate() {
-        *a = ((i as f32 * 6.0 * ::std::f32::consts::PI / 128.0).sin() * 8192.0) as i16
-    }
-
-    for _ in 0..AUDIO_LENGTH * 44100 / 1024 {
-        assert_eq!(io.writei(&buf[..])?, 1024);
-    }
+    play_sine_wave(&io, &mut buf, 2.0)?;
+    play_sine_wave(&io, &mut buf, 4.0)?;
+    play_sine_wave(&io, &mut buf, 6.0)?;
 
     if pcm.state() != State::Running {
         pcm.start()?
     };
     // Wait for the stream to finish playback.
     pcm.drain()?;
+
+    Ok(())
+}
+
+fn main() -> anyhow::Result<()> {
+    if let Some(arg) = std::env::args().nth(1) {
+        if arg == "--version" {
+            let name = env!("CARGO_PKG_NAME");
+            let version = env!("CARGO_PKG_VERSION");
+            eprintln!("{name}: {version}");
+            std::process::exit(0);
+        }
+    }
+
+    let frame_thread = thread::spawn(|| -> anyhow::Result<()> { frame() });
+    let siren_thread = thread::spawn(|| -> anyhow::Result<()> { siren() });
+
+    if let Ok(frame_thread_status) = frame_thread.join() {
+        // propagate error that might have happened in the thread
+        frame_thread_status?;
+    } else {
+        bail!("Unable to join frame_thread");
+    };
+    if let Ok(siren_thread_status) = siren_thread.join() {
+        siren_thread_status?;
+    } else {
+        bail!("Unable to join siren_thread");
+    };
 
     Ok(())
 }
