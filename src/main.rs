@@ -140,12 +140,22 @@ fn siren() -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     if let Some(arg) = std::env::args().nth(1) {
-        if arg == "--version" {
-            let name = env!("CARGO_PKG_NAME");
-            let version = env!("CARGO_PKG_VERSION");
-            eprintln!("{name}: {version}");
-            std::process::exit(0);
+        let name = env!("CARGO_PKG_NAME");
+        let version = env!("CARGO_PKG_VERSION");
+        match arg.as_str() {
+            "-v" => eprintln!("{name}: {version}"),
+            _ => {
+                eprintln!(
+                    "Usage: {name} [-v] [-h]\n\
+                      \t-v\tPrint the current version\n\
+                      \t-h\tShow this help"
+                );
+                if arg != "-h" {
+                    std::process::exit(1);
+                }
+            }
         }
+        std::process::exit(0);
     }
 
     let frame_thread = thread::spawn(|| -> anyhow::Result<()> { frame() });
