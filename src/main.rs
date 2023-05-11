@@ -20,6 +20,24 @@ const FRAME_LENGTH: u64 = 1;
 // amount of time one audio sample should play
 const AUDIO_LENGTH: u64 = 1;
 
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+// `From` doesn't make sense as we're only trying to represent 3 colors
+#[allow(clippy::from_over_into)]
+impl Into<(u8, u8, u8)> for Color {
+    fn into(self) -> (u8, u8, u8) {
+        match self {
+            Self::Red => (0xFF, 0, 0),
+            Self::Green => (0, 0xFF, 0),
+            Self::Blue => (0, 0, 0xFF),
+        }
+    }
+}
+
 fn frame_set_color(frame: &mut [u8], color: (u8, u8, u8)) {
     for pixel in &mut frame.chunks_mut(4) {
         pixel[0] = color.2;
@@ -30,8 +48,8 @@ fn frame_set_color(frame: &mut [u8], color: (u8, u8, u8)) {
 }
 
 /// Write frame to framebuffer and wait for `FRAME_LENGTH` seconds.
-fn frame_write_color(framebuffer: &mut Framebuffer, frame: &mut [u8], color: (u8, u8, u8)) {
-    frame_set_color(frame, color);
+fn frame_write_color(framebuffer: &mut Framebuffer, frame: &mut [u8], color: Color) {
+    frame_set_color(frame, color.into());
     framebuffer.write_frame(frame);
     thread::sleep(time::Duration::from_secs(FRAME_LENGTH));
 }
@@ -54,9 +72,9 @@ fn frame() -> anyhow::Result<()> {
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Graphics)
         .context("Unable to disable text mode on framebuffer")?;
 
-    frame_write_color(&mut framebuffer, &mut frame, (0xff, 0, 0));
-    frame_write_color(&mut framebuffer, &mut frame, (0, 0xff, 0));
-    frame_write_color(&mut framebuffer, &mut frame, (0, 0, 0xff));
+    frame_write_color(&mut framebuffer, &mut frame, Color::Red);
+    frame_write_color(&mut framebuffer, &mut frame, Color::Green);
+    frame_write_color(&mut framebuffer, &mut frame, Color::Blue);
 
     //Reenable text mode in current tty
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Text)
