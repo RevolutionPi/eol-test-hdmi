@@ -35,10 +35,45 @@ linker = "arm-linux-gnueabihf-gcc"
 PKG_CONFIG_SYSROOT_DIR="/usr/arm-linux-gnueabihf"
 ```
 
+Or like this for `aarch64`:
+
+```toml
+[build]
+target = "aarch64-unknown-linux-gnu"
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+
+[env]
+PKG_CONFIG_SYSROOT_DIR="/usr/aarch64-linux-gnu"
+```
+
 It's important that, when cross-compiling, the `rust-std` component is
 installed for the target architecture. If this is not the case the compiler
 will output a long list of errors that point to the standard library missing
 for the target.
+
+Ideally, `rust-toolchain.toml` should also define the `targets` for which the
+application will be compiled for. For example, to have both the `armv7` and
+`aarch64` targets installed:
+
+```toml
+[toolchain]
+# ...
+targets = ["armv7-unknown-linux-gnueabihf", "aarch64-unknown-linux-gnu"]
+# ...
+```
+
+A full example for a `rust-toolchain.toml` file that uses Rust version 1.63.0
+and compiles for `aarch64-unknown-linux-gnu`, with the required components
+installed, may look like this:
+
+```toml
+[toolchain]
+channel = "1.63.0"
+targets = ["aarch64-unknown-linux-gnu"]
+components = ["rustc", "cargo", "rust-std", "clippy"]
+```
 
 ### Cargo
 
@@ -51,6 +86,17 @@ cargo build --release --target armv7-unknown-linux-gnueabihf
 ```
 
 Alternatively, the target can be set in the `.cargo/config.toml` file.
+
+### Docker
+
+Docker can be used to cross-compile the application for a different target and
+glibc version. For this, the `Dockerfile` in this repository can be used.  
+It has cross-compilation set up for aarch64/amd64 and armv7/armhf. To only use
+one of the 2 comment the other one out, both in the section where the toolchain
+is being installed with `rustup` and the dependencies that are installed.
+
+For cross-compilation, a `.cargo/config.toml` should be present specifying all
+the options needed. See section `Configuration` above.
 
 ## Running
 
