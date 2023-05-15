@@ -16,4 +16,5 @@ strip = true
 [dependencies]
 alsa = "0.7.0"
 anyhow = "1.0.71"
+clap = { version = "4.2.7", features = ["derive"] }
 framebuffer = "0.3.1"
