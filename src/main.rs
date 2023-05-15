@@ -9,8 +9,11 @@
 use alsa::pcm::{Access, Format, HwParams, State, PCM};
 use alsa::{Direction, ValueOr};
 use anyhow::{bail, Context};
+use clap::Parser;
 use framebuffer::{Framebuffer, KdMode};
 use std::{thread, time};
+
+mod cli;
 
 const TTY: &str = "/dev/tty1";
 const FB: &str = "/dev/fb0";
@@ -139,24 +142,10 @@ fn siren() -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    if let Some(arg) = std::env::args().nth(1) {
-        let name = env!("CARGO_PKG_NAME");
-        let version = env!("CARGO_PKG_VERSION");
-        match arg.as_str() {
-            "-v" => eprintln!("{name}: {version}"),
-            _ => {
-                eprintln!(
-                    "Usage: {name} [-v] [-h]\n\
-                      \t-v\tPrint the current version\n\
-                      \t-h\tShow this help"
-                );
-                if arg != "-h" {
-                    std::process::exit(1);
-                }
-            }
-        }
-        std::process::exit(0);
-    }
+    // the struct itself is not useful yet as no information is passed to the program. when
+    // instantiating, however, the help and version flags become available.
+    // instantiation is required to parse cli args
+    let _ = cli::Args::parse();
 
     let frame_thread = thread::spawn(|| -> anyhow::Result<()> { frame() });
     let siren_thread = thread::spawn(|| -> anyhow::Result<()> { siren() });
