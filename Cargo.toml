@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# SPDX-FileCopyrightText: Copyright 2023 KUNBUS GmbH
+# SPDX-FileCopyrightText: Copyright 2023-2024 KUNBUS GmbH
 
 [package]
 name = "eol-test-hdmi"
@@ -9,6 +9,12 @@ description = "Tool to test HDMI output by drawing on the framebuffer and playin
 version = "0.0.0"
 edition = "2021"
 repository = "https://github.com/RevolutionPi/eol-test-hdmi"
+
+[workspace.metadata.cross.target.aarch64-unknown-linux-gnu]
+pre-build = [
+	"dpkg --add-architecture arm64",
+	"apt-get update && apt-get install -y libasound2-dev:arm64"
+]
 
 [profile.release]
 strip = true
