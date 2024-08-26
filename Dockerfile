@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 KUNBUS GmbH
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # Compile a given source for aarch64/amd64 or armv7/armhf.
 # If only one of the two is needed the other can simply be commented out.
 # The target that should be compiled should be set in the project's

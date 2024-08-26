@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2023 KUNBUS GmbH
+
+SPDX-License-Identifier: GPL-2.0-or-later
+-->
+
 # eol-test-hdmi
 
 Show red, green, and blue colours on the framebuffer at `/dev/fb0` for 1 second

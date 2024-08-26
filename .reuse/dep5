@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: eol-test-hdmi
+Upstream-Contact: KUNBUS GmbH <support@kunbus.com>
+Source: https://gitlab.com/revolutionpi/manufacturing/eol-test-hdmi
+
+Files: Cargo.lock
+Copyright: 2023-2024 KUNBUS GmbH
+License: CC0-1.0
