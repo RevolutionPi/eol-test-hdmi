@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: GPL-2.0-or-later
- * SPDX-FileCopyrightText: Copyright 2023 KUNBUS GmbH
+ * SPDX-FileCopyrightText: Copyright 2023-2024 KUNBUS GmbH
  */
 
 //! Test video and audio output by showing coloured frames on the framebuffer and playing back a
@@ -31,28 +31,59 @@ enum Color {
 
 // `From` doesn't make sense as we're only trying to represent 3 colors
 #[allow(clippy::from_over_into)]
-impl Into<(u8, u8, u8)> for Color {
-    fn into(self) -> (u8, u8, u8) {
+impl Into<[u8; 4]> for Color {
+    fn into(self) -> [u8; 4] {
         match self {
-            Self::Red => (0xFF, 0, 0),
-            Self::Green => (0, 0xFF, 0),
-            Self::Blue => (0, 0, 0xFF),
+            Self::Red => 0xFFu32 << 16,
+            Self::Green => 0xFFu32 << 8,
+            Self::Blue => 0xFFu32,
         }
+        .to_le_bytes()
     }
 }
 
-fn frame_set_color(frame: &mut [u8], color: (u8, u8, u8)) {
-    for pixel in &mut frame.chunks_mut(4) {
-        pixel[0] = color.2;
-        pixel[1] = color.1;
-        pixel[2] = color.0;
-        pixel[3] = 0xff;
+#[allow(clippy::from_over_into)]
+impl Into<[u8; 2]> for Color {
+    fn into(self) -> [u8; 2] {
+        match self {
+            Self::Red => rgb888_to_rgb565(0xFF, 0, 0),
+            Self::Green => rgb888_to_rgb565(0, 0xFF, 0),
+            Self::Blue => rgb888_to_rgb565(0, 0, 0xFF),
+        }
+        .to_le_bytes()
+    }
+}
+
+/// Convert a RGB888 color to RGB565
+const fn rgb888_to_rgb565(red: u8, green: u8, blue: u8) -> u16 {
+    let r = (red >> 3) as u16;
+    let g = (green >> 2) as u16;
+    let b = (blue >> 3) as u16;
+
+    (r << 11) | (g << 5) | b
+}
+
+fn frame_set_color(frame: &mut [u8], color: Color, bytespp: u32) {
+    match bytespp {
+        2 => {
+            let color: [u8; 2] = color.into();
+            let mut color = color.iter().cycle().peekable();
+            assert!(color.peek().is_some());
+            frame.fill_with(|| *color.next().expect("BUG: 2-width color is empty"));
+        }
+        4 => {
+            let color: [u8; 4] = color.into();
+            let mut color = color.iter().cycle().peekable();
+            assert!(color.peek().is_some());
+            frame.fill_with(|| *color.next().expect("BUG: 4-width color is empty"));
+        }
+        other => panic!("{other} bytes per pixel is not supported"),
     }
 }
 
 /// Write frame to framebuffer and wait for `FRAME_LENGTH` seconds.
-fn frame_write_color(framebuffer: &mut Framebuffer, frame: &mut [u8], color: Color) {
-    frame_set_color(frame, color.into());
+fn frame_write_color(framebuffer: &mut Framebuffer, frame: &mut [u8], color: Color, bytespp: u32) {
+    frame_set_color(frame, color, bytespp);
     framebuffer.write_frame(frame);
     thread::sleep(time::Duration::from_secs(FRAME_LENGTH));
 }
@@ -75,9 +106,9 @@ fn frame() -> anyhow::Result<()> {
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Graphics)
         .context("Unable to disable text mode on framebuffer")?;
 
-    frame_write_color(&mut framebuffer, &mut frame, Color::Red);
-    frame_write_color(&mut framebuffer, &mut frame, Color::Green);
-    frame_write_color(&mut framebuffer, &mut frame, Color::Blue);
+    frame_write_color(&mut framebuffer, &mut frame, Color::Red, bytespp);
+    frame_write_color(&mut framebuffer, &mut frame, Color::Green, bytespp);
+    frame_write_color(&mut framebuffer, &mut frame, Color::Blue, bytespp);
 
     //Reenable text mode in current tty
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Text)
