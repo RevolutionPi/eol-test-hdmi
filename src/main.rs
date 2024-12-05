@@ -91,7 +91,8 @@ fn frame_write_color(framebuffer: &mut Framebuffer, frame: &mut [u8], color: Col
 /// Display 3 frames, each being shown for `FRAME_LENGTH` seconds. The frames will alternate in
 /// Red, Green, and Blue.
 fn frame() -> anyhow::Result<()> {
-    let mut framebuffer = Framebuffer::new(FB)?;
+    let mut framebuffer =
+        Framebuffer::new(FB).with_context(|| format!("Failed to open framebuffer '{FB}'"))?;
 
     let fb_width = framebuffer.var_screen_info.xres;
     let fb_height = framebuffer.var_screen_info.yres;
@@ -104,7 +105,7 @@ fn frame() -> anyhow::Result<()> {
 
     //Disable text mode for tty1
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Graphics)
-        .context("Unable to disable text mode on framebuffer")?;
+        .with_context(|| format!("Unable to disable text mode on TTY '{TTY}'"))?;
 
     frame_write_color(&mut framebuffer, &mut frame, Color::Red, bytespp);
     frame_write_color(&mut framebuffer, &mut frame, Color::Green, bytespp);
@@ -112,7 +113,7 @@ fn frame() -> anyhow::Result<()> {
 
     //Reenable text mode in current tty
     Framebuffer::set_kd_mode_ex(TTY, KdMode::Text)
-        .context("Unable to enable text mode on framebuffer")?;
+        .with_context(|| format!("Unable to enable text mode on TTY '{TTY}'"))?;
 
     Ok(())
 }
@@ -125,7 +126,11 @@ fn play_sine_wave(io: &alsa::pcm::IO<i16>, buf: &mut [i16], pitch: f32) -> anyho
 
     // Play it back for AUDIO_LENGTH seconds.
     for _ in 0..AUDIO_LENGTH * 44100 / 1024 {
-        assert_eq!(io.writei(buf)?, 1024);
+        assert_eq!(
+            io.writei(buf)
+                .context("Failed to write sine wave value to audio buffer")?,
+            1024
+        );
     }
 
     Ok(())
@@ -136,38 +141,54 @@ fn play_sine_wave(io: &alsa::pcm::IO<i16>, buf: &mut [i16], pitch: f32) -> anyho
 /// back for `AUDIO_LENGTH` seconds.
 fn siren() -> anyhow::Result<()> {
     // Open default playback device
-    let pcm = PCM::new("default", Direction::Playback, false)?;
-    let info = pcm.info()?;
-    let name = info.get_name()?;
+    let pcm = PCM::new("default", Direction::Playback, false)
+        .context("Failed to open default playback device")?;
+    let info = pcm.info().context("Failed to get playback device info")?;
+    let name = info
+        .get_name()
+        .context("Failed to get default playback device name")?;
     println!("Device: {name}");
 
     // Set hardware parameters: 44100 Hz / Mono / 16 bit
-    let hwp = HwParams::any(&pcm)?;
-    hwp.set_channels(1)?;
-    hwp.set_rate(44100, ValueOr::Nearest)?;
-    hwp.set_format(Format::s16())?;
-    hwp.set_access(Access::RWInterleaved)?;
-    pcm.hw_params(&hwp)?;
-    let io = pcm.io_i16()?;
+    let hwp = HwParams::any(&pcm).context("Failed to prepare hardware parameters")?;
+    hwp.set_channels(1).context("Failed to set channels")?;
+    hwp.set_rate(44100, ValueOr::Nearest)
+        .context("Failed to set audio rate")?;
+    hwp.set_format(Format::s16())
+        .context("Failed to set audio format")?;
+    hwp.set_access(Access::RWInterleaved)
+        .context("Failed to set audio access")?;
+    pcm.hw_params(&hwp)
+        .context("Failed to set hardware parameters")?;
+    let io = pcm.io_i16().context("Failed to get audio IO")?;
 
     // Make sure we don't start the stream too early
-    let hwp = pcm.hw_params_current()?;
-    let swp = pcm.sw_params_current()?;
-    swp.set_start_threshold(hwp.get_buffer_size()?)?;
-    pcm.sw_params(&swp)?;
+    let hwp = pcm
+        .hw_params_current()
+        .context("Failed to get current audio hardware parameters")?;
+    let swp = pcm
+        .sw_params_current()
+        .context("Failed to get current audio software parameters")?;
+    swp.set_start_threshold(
+        hwp.get_buffer_size()
+            .context("Failed to get hardware audio buffer size")?,
+    )
+    .context("Failed to set audio start threshold")?;
+    pcm.sw_params(&swp)
+        .context("Failed to set audio software parameters")?;
 
     // Make a sine wave
     let mut buf = [0i16; 1024];
 
-    play_sine_wave(&io, &mut buf, 2.0)?;
-    play_sine_wave(&io, &mut buf, 4.0)?;
-    play_sine_wave(&io, &mut buf, 6.0)?;
+    play_sine_wave(&io, &mut buf, 2.0).context("Failed to play sine wave")?;
+    play_sine_wave(&io, &mut buf, 4.0).context("Failed to play sine wave")?;
+    play_sine_wave(&io, &mut buf, 6.0).context("Failed to play sine wave")?;
 
     if pcm.state() != State::Running {
-        pcm.start()?
+        pcm.start().context("Failed to start audio playback")?
     };
     // Wait for the stream to finish playback.
-    pcm.drain()?;
+    pcm.drain().context("Failed to play audio")?;
 
     Ok(())
 }
@@ -183,12 +204,12 @@ fn main() -> anyhow::Result<()> {
 
     if let Ok(frame_thread_status) = frame_thread.join() {
         // propagate error that might have happened in the thread
-        frame_thread_status?;
+        frame_thread_status.context("Failed to display frames")?;
     } else {
         bail!("Unable to join frame_thread");
     };
     if let Ok(siren_thread_status) = siren_thread.join() {
-        siren_thread_status?;
+        siren_thread_status.context("Failed to play sound")?;
     } else {
         bail!("Unable to join siren_thread");
     };
